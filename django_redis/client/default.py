@@ -15,6 +15,7 @@ from ..util import CacheKey
 
 # !!!SPLICE
 from fakeredis import FakeStrictRedis
+from django.splice.splicetypes import SpliceInt
 
 _main_exceptions = (TimeoutError, ResponseError, ConnectionError, socket.timeout)
 
@@ -356,7 +357,9 @@ class DefaultClient:
         Decode the given value.
         """
         try:
-            value = int(value)
+            # !!!SPLICE: Casting to SpliceInt for taint propagation
+            # value = int(value)
+            value = SpliceInt(value)
         except (ValueError, TypeError):
             try:
                 value = self._compressor.decompress(value)

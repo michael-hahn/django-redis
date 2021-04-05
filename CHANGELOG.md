@@ -40,3 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   
     - The `get` method is modified to comply with the fact that `fakeredis`
       returns `b''` when a key does not exist, instead of `None`.
+      
+    - The `decode` method casts `value` to taint-aware `int` type, instead of
+      the built-in `int` type which loses taints. Note that this change is not
+      necessary once we shadow all built-in data types to taint-aware types.
