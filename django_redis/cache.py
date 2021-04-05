@@ -40,6 +40,7 @@ def omit_exception(method=None, return_value=None):
 class RedisCache(BaseCache):
     def __init__(self, server, params):
         super().__init__(params)
+        # !!!SPLICE: Note that the server can be 'fakeredis'
         self._server = server
         self._params = params
 

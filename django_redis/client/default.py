@@ -13,6 +13,9 @@ from .. import pool
 from ..exceptions import CompressorError, ConnectionInterrupted
 from ..util import CacheKey
 
+# !!!SPLICE
+from fakeredis import FakeStrictRedis
+
 _main_exceptions = (TimeoutError, ResponseError, ConnectionError, socket.timeout)
 
 
@@ -26,6 +29,7 @@ def glob_escape(s):
 class DefaultClient:
     def __init__(self, server, params, backend):
         self._backend = backend
+        # !!!SPLICE: Note that the server can be 'fakeredis'
         self._server = server
         self._params = params
 
@@ -103,6 +107,11 @@ class DefaultClient:
         instance. Index is used for replication setups and indicates that
         connection string should be used. In normal setups, index is 0.
         """
+        # !!!SPLICE: If self._server[index] is 'fakeredis', we will
+        #            make a simple connection to fakeredis server and
+        #            we will not leverage connection pool for simplicity
+        if self._server[index] == 'fakeredis':
+            return FakeStrictRedis()
         return self.connection_factory.connect(self._server[index])
 
     def disconnect(self, index=0, client=None):
@@ -226,7 +235,10 @@ class DefaultClient:
         except _main_exceptions as e:
             raise ConnectionInterrupted(connection=client) from e
 
-        if value is None:
+        # !!!SPLICE: fakeredis does not return None if a key
+        #            does not exist; instead it returns b''.
+        # if value is None:
+        if value is None or value == b'':
             return default
 
         return self.decode(value)
