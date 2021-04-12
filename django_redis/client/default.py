@@ -13,9 +13,8 @@ from .. import pool
 from ..exceptions import CompressorError, ConnectionInterrupted
 from ..util import CacheKey
 
-# !!!SPLICE
+# !!!SPLICE: Enable django-redis to communicate with fakeredis
 from fakeredis import FakeStrictRedis
-from django.splice.splicetypes import SpliceInt
 
 _main_exceptions = (TimeoutError, ResponseError, ConnectionError, socket.timeout)
 
@@ -112,7 +111,11 @@ class DefaultClient:
         #            make a simple connection to fakeredis server and
         #            we will not leverage connection pool for simplicity
         if self._server[index] == 'fakeredis':
-            return FakeStrictRedis()
+            # !!!SPLICE: Server need to know how data is compressed and serialized by
+            #            Django-redis. This is because we also encode non-string values
+            #            to preserve their taints, but the server does not expect those
+            #            values to be encoded at all.
+            return FakeStrictRedis(compressor=self._compressor, serializer=self._serializer)
         return self.connection_factory.connect(self._server[index])
 
     def disconnect(self, index=0, client=None):
@@ -356,17 +359,19 @@ class DefaultClient:
         """
         Decode the given value.
         """
-        try:
-            # !!!SPLICE: Casting to SpliceInt for taint propagation
+        # !!!SPLICE: In the original implementation, int values
+        #            are not encoded, but Splice encodes all types
+        #            of values to preserve taints. Therefore, we
+        #            will try to decompress and load any value.
+        # try:
             # value = int(value)
-            value = SpliceInt(value)
-        except (ValueError, TypeError):
-            try:
-                value = self._compressor.decompress(value)
-            except CompressorError:
-                # Handle little values, chosen to be not compressed
-                pass
-            value = self._serializer.loads(value)
+        # except (ValueError, TypeError):
+        try:
+            value = self._compressor.decompress(value)
+        except CompressorError:
+            # Handle little values, chosen to be not compressed
+            pass
+        value = self._serializer.loads(value)
         return value
 
     def encode(self, value):
@@ -374,11 +379,14 @@ class DefaultClient:
         Encode the given value.
         """
 
-        if isinstance(value, bool) or not isinstance(value, int):
-            value = self._serializer.dumps(value)
-            value = self._compressor.compress(value)
-            return value
+        # !!!SPLICE: Encode all values including ints. This is different
+        #            from the original implementation where int values are
+        #            not encoded. We also encode ints because int taints
+        #            cannot propagate properly without encoding.
+        # if isinstance(value, bool) or not isinstance(value, int):
 
+        value = self._serializer.dumps(value)
+        value = self._compressor.compress(value)
         return value
 
     def get_many(self, keys, version=None, client=None):
@@ -619,3 +627,71 @@ class DefaultClient:
             # Convert to milliseconds
             timeout = int(timeout * 1000)
             return bool(client.pexpire(key, timeout))
+
+    # !!!SPLICE: Add a ZADD command to Redis cache
+    def zadd(self, key, *args, version=None, client=None, nx=False, xx=False, ch=False, incr=False):
+        """
+        Set any number of element-name, score pairs to the key ``key``. Pairs
+        are specified in args as an alternate list of scores and members, i.e.,
+        score1, member1, score2, member2...
+
+        ``nx`` forces ZADD to only create new elements and not to update
+        scores for elements that already exist.
+
+        ``xx`` forces ZADD to only update scores of elements that already
+        exist. New elements will not be added.
+
+        ``ch`` modifies the return value to be the numbers of elements changed.
+        Changed elements include new elements that were added and elements
+        whose scores changed.
+
+        ``incr`` modifies ZADD to behave like ZINCRBY. In this mode only a
+        single element/score pair can be specified and the score is the amount
+        the existing score will be incremented by. When using this mode the
+        return value of ZADD will be the new score of the element.
+
+        The return value of ZADD varies based on the mode specified. With no
+        options, ZADD returns the number of new elements added to the sorted
+        set."""
+        if client is None:
+            client = self.get_client(write=False)
+
+        key = self.make_key(key, version=version)
+        # Note that both scores and members are encoded (to preserve taints)
+        mapping = {self.encode(args[j + 1]): self.encode(args[j])
+                   for j in range(0, len(args), 2)}
+        try:
+            return client.zadd(key, mapping, nx=nx, xx=xx, ch=ch, incr=incr)
+        except _main_exceptions as e:
+            raise ConnectionInterrupted(connection=client) from e
+
+    # !!!SPLICE: Add a ZRANGE command to Redis cache
+    def zrange(self, key, start, end, version=None, client=None, desc=False, withscores=False):
+        """
+        Return a range of values from sorted set ``key`` between
+        ``start`` and ``end`` sorted in ascending order.
+
+        ``start`` and ``end`` can be negative, indicating the end of the range.
+
+        ``desc`` a boolean indicating whether to sort the results descendingly
+
+        ``withscores`` indicates to return the scores along with the values.
+        The return type is a list of (value, score) pairs
+        """
+        if client is None:
+            client = self.get_client(write=False)
+
+        key = self.make_key(key, version=version)
+
+        try:
+            values = client.zrange(key, start, end, desc=desc, withscores=withscores)
+            decoded_values = list()
+            if not withscores:
+                for value in values:
+                    decoded_values.append(self.decode(value))
+            else:
+                for pair in values:
+                    decoded_values.append((self.decode(pair[0]), self.decode(pair[1])))
+        except _main_exceptions as e:
+            raise ConnectionInterrupted(connection=client) from e
+        return decoded_values

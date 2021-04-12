@@ -165,3 +165,13 @@ class RedisCache(BaseCache):
     @omit_exception
     def touch(self, *args, **kwargs):
         return self.client.touch(*args, **kwargs)
+
+    # !!!SPLICE: Add new commands for Redis cache to demonstrate deletion-by-synthesis.
+    #            To use commands, client code (in client dir) must also be instrumented.
+    @omit_exception
+    def zadd(self, *args, **kwargs):
+        return self.client.zadd(*args, **kwargs)
+
+    @omit_exception
+    def zrange(self, *args, **kwargs):
+        return self.client.zrange(*args, **kwargs)

@@ -19,9 +19,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - We use our modified, Splice-aware 
       [`redis-py`](https://github.com/michael-hahn/redis-py), instead of the
       original package. See its `CHANGELOG` for more information.
-    - We use our [`django`](https://github.com/michael-hahn/django-1/tree/splice)
-      package (instead of the original `django`) to introduce taint-aware 
-      Splice data types.
       
 - We support Splice-aware `DefaultClient`:
     - The `connect` method can establish a connection to `fakeredis` if `django`'s
@@ -40,7 +37,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   
     - The `get` method is modified to comply with the fact that `fakeredis`
       returns `b''` when a key does not exist, instead of `None`.
+    - The `encode` method encodes all types of data (including `int`s).
+    - The `decode` method decodes all types of data.
       
-    - The `decode` method casts `value` to taint-aware `int` type, instead of
-      the built-in `int` type which loses taints. Note that this change is not
-      necessary once we shadow all built-in data types to taint-aware types.
+- We add additional cache commands for Redis cache (in `cache.py` and 
+  `client/default.py`):
+  - `ZADD`
+  - `ZRANGE`
