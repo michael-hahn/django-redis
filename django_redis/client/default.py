@@ -15,6 +15,8 @@ from ..util import CacheKey
 
 # !!!SPLICE: Enable django-redis to communicate with fakeredis
 from fakeredis import FakeStrictRedis
+from django.splice.splicetypes import SpliceMixin
+from django.splice.identity import empty_taint
 
 _main_exceptions = (TimeoutError, ResponseError, ConnectionError, socket.timeout)
 
@@ -245,7 +247,10 @@ class DefaultClient:
         if value is None or value == b'':
             return default
 
-        return self.decode(value)
+        # !!!SPLICE: value is no longer encoded at the fakeredis server side
+        #            because the server has decoded the value already.
+        # return self.decode(value)
+        return value
 
     def persist(self, key, version=None, client=None):
         if client is None:
@@ -549,7 +554,9 @@ class DefaultClient:
 
         pattern = self.make_pattern(search, version=version)
         for item in client.scan_iter(match=pattern, count=itersize):
-            yield self.reverse_key(item.decode())
+            # !!!SPLICE: item no longer needs to be decoded
+            # yield self.reverse_key(item.decode())
+            yield self.reverse_key(item)
 
     def keys(self, search, version=None, client=None):
         """
@@ -577,8 +584,19 @@ class DefaultClient:
 
         if version is None:
             version = self._backend.version
-
-        return CacheKey(self._backend.key_func(key, prefix, version))
+        # !!!SPLICE: key_func() loses taints, we kinda have to hack this.
+        #            We will convert key to SpliceStr manually.
+        key_taint = getattr(key, "taints", empty_taint())
+        key_trust = getattr(key, "trusted", True)
+        key_synth = getattr(key, "synthesized", False)
+        key = SpliceMixin.to_splice(self._backend.key_func(key, prefix, version),
+                                    trusted=key_trust,
+                                    synthesized=key_synth,
+                                    taints=key_taint)
+        # return CacheKey(self._backend.key_func(key, prefix, version))
+        # !!!SPLICE: We also encode the key to preserve taints.
+        return self.encode(CacheKey(key))
+        # return CacheKey(key)
 
     def make_pattern(self, pattern, version=None, prefix=None):
         if isinstance(pattern, CacheKey):
@@ -685,13 +703,14 @@ class DefaultClient:
 
         try:
             values = client.zrange(key, start, end, desc=desc, withscores=withscores)
-            decoded_values = list()
-            if not withscores:
-                for value in values:
-                    decoded_values.append(self.decode(value))
-            else:
-                for pair in values:
-                    decoded_values.append((self.decode(pair[0]), self.decode(pair[1])))
+            # decoded_values = list()
+            # if not withscores:
+            #     for value in values:
+            #         decoded_values.append(self.decode(value))
+            # else:
+            #     for pair in values:
+            #         decoded_values.append((self.decode(pair[0]), self.decode(pair[1])))
         except _main_exceptions as e:
             raise ConnectionInterrupted(connection=client) from e
-        return decoded_values
+        # return decoded_values
+        return values
