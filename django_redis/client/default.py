@@ -461,7 +461,11 @@ class DefaultClient:
                     lua = """
                     return redis.call('INCRBY', KEYS[1], ARGV[1])
                     """
-                value = client.eval(lua, 1, key, delta)
+                # !!!SPLICE: FIXME -- for some unknown reason lua script does not work well.
+                #            Perhaps it is because we modified make_key() above?
+                #            We just call get() for now as a quick hack.
+                # value = client.eval(lua, 1, key, delta)
+                value = self.get(key, version=version, client=client)
                 if value is None:
                     raise ValueError("Key '%s' not found" % key)
             except ResponseError:
