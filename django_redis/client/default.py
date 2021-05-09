@@ -589,10 +589,12 @@ class DefaultClient:
         key_taint = getattr(key, "taints", empty_taint())
         key_trust = getattr(key, "trusted", True)
         key_synth = getattr(key, "synthesized", False)
+        key_const = getattr(key, "constraints", [])
         key = SpliceMixin.to_splice(self._backend.key_func(key, prefix, version),
                                     trusted=key_trust,
                                     synthesized=key_synth,
-                                    taints=key_taint)
+                                    taints=key_taint,
+                                    constraints=key_const)
         # return CacheKey(self._backend.key_func(key, prefix, version))
         # !!!SPLICE: We also encode the key to preserve taints.
         return self.encode(CacheKey(key))
