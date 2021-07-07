@@ -166,8 +166,10 @@ class RedisCache(BaseCache):
     def touch(self, *args, **kwargs):
         return self.client.touch(*args, **kwargs)
 
-    # !!!SPLICE: Add new commands for Redis cache to demonstrate deletion-by-synthesis.
-    #            To use commands, client code (in client dir) must also be instrumented.
+    # !!!SPLICE =+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
+    # Add new commands for Redis cache to demonstrate deletion-by-synthesis. To
+    # use these commands, client code (in client dir) must also be instrumented
+    # TODO: We only instrumented default clients (in default.py) at the moment.
     @omit_exception
     def zadd(self, *args, **kwargs):
         return self.client.zadd(*args, **kwargs)
@@ -175,3 +177,14 @@ class RedisCache(BaseCache):
     @omit_exception
     def zrange(self, *args, **kwargs):
         return self.client.zrange(*args, **kwargs)
+
+    @omit_exception
+    def hadd(self, *args, **kwargs):
+        """Add to a hashmap (Redis does not have this command natively). """
+        return self.client.hadd(*args, **kwargs)
+
+    @omit_exception
+    def tadd(self, *args, **kwargs):
+        """Add to an AVL tree (Redis does not have this command natively). """
+        return self.client.tadd(*args, **kwargs)
+    # =+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=

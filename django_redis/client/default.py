@@ -652,7 +652,9 @@ class DefaultClient:
             timeout = int(timeout * 1000)
             return bool(client.pexpire(key, timeout))
 
-    # !!!SPLICE: Add a ZADD command to Redis cache
+    # !!!SPLICE =+=+=+=+=+=+=+=+=+=+=+=
+    # Add a ZADD command to Redis cache
+    # =+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
     def zadd(self, key, *args, version=None, client=None, nx=False, xx=False, ch=False, incr=False):
         """
         Set any number of element-name, score pairs to the key ``key``. Pairs
@@ -689,7 +691,9 @@ class DefaultClient:
         except _main_exceptions as e:
             raise ConnectionInterrupted(connection=client) from e
 
-    # !!!SPLICE: Add a ZRANGE command to Redis cache
+    # !!!SPLICE =+=+=+=+=+=+=+=+=+=+=+=+=
+    # Add a ZRANGE command to Redis cache
+    # =+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=
     def zrange(self, key, start, end, version=None, client=None, desc=False, withscores=False):
         """
         Return a range of values from sorted set ``key`` between
@@ -720,3 +724,47 @@ class DefaultClient:
             raise ConnectionInterrupted(connection=client) from e
         # return decoded_values
         return values
+
+    # !!!SPLICE =+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
+    # Add a HADD command to Redis cache. We are adding a key-value pair
+    # to a hashmap. Note that Redis does not have this command natively.
+    # =+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
+    def hadd(self, key, *args, version=None, client=None):
+        """
+        Set any number of key-value pairs to the key ``key``. Pairs
+        are specified in args as an alternate list of keys and values, i.e.,
+        key1, value1, key2, value2...
+        """
+        if client is None:
+            client = self.get_client(write=False)
+
+        key = self.make_key(key, version=version)
+        # Note that both keys and values are encoded (to preserve taints)
+        mapping = {self.encode(args[j]): self.encode(args[j + 1])
+                   for j in range(0, len(args), 2)}
+        try:
+            return client.hadd(key, mapping)
+        except _main_exceptions as e:
+            raise ConnectionInterrupted(connection=client) from e
+
+    # !!!SPLICE =+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
+    # Add a TADD command to Redis cache. We are adding a key-value pair
+    # to an AVL Tree. Note that Redis does not have this command natively.
+    # =+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
+    def tadd(self, key, *args, version=None, client=None):
+        """
+        Set any number of key-value pairs to the key ``key``. Pairs
+        are specified in args as an alternate list of keys and values, i.e.,
+        key1, value1, key2, value2...
+        """
+        if client is None:
+            client = self.get_client(write=False)
+
+        key = self.make_key(key, version=version)
+        # Note that both keys and values are encoded (to preserve taints)
+        mapping = {self.encode(args[j]): self.encode(args[j + 1])
+                   for j in range(0, len(args), 2)}
+        try:
+            return client.tadd(key, mapping)
+        except _main_exceptions as e:
+            raise ConnectionInterrupted(connection=client) from e
